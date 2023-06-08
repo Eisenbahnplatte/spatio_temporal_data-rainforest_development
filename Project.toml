@@ -1,3 +1,4 @@
 [deps]
+DotEnv = "4dc1fcf4-5e3b-5448-94ab-0c38ec0385c1"
 YAXArrays = "c21b50f5-aa40-41ea-b809-c0f5e47bfa5c"
 Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
