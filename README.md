@@ -30,3 +30,4 @@ Content of the `.env` file:
 ZARR_PATH=https://s3.eu-central-1.amazonaws.com/deep-esdl-public/LC-1x2160x2160-1.0.0.zarr
 ```
 
+ich mache meinen commit
