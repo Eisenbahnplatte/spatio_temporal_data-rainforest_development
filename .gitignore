@@ -32,3 +32,6 @@ Manifest.toml
 
 # ignore  the sample cubes -> too big for repo
 sample_cubes
+
+# VScode files
+.vscode
