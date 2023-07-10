@@ -35,3 +35,6 @@ sample_cubes
 
 # VScode files
 .vscode
+
+# ignores the temp dir
+tmp
