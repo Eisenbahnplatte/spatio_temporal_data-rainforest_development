@@ -114,9 +114,22 @@ module RainforestLib
     
     end
 
-    function build_bitmask_by_lccs_class(datacube::YAXArrays.YAXArray, accepted_values::Set{string})
+    function build_bitmask_by_lccs_class(local_matrix::Matrix, accepted_values::Set{String}):: Matrix{Float32}
 
-        result = mapslices(datacube)
+        # fetch the flag values for each string item
+        flag_vals = get_lccs_flag.(accepted_values)
+
+        # generate the bitmask by broadcasting the isin function
+        bitmask = in.(local_matrix, flag_vals)
+
+        # last step is for converting to NaN and 
+        return map(bitmask) do x
+            if x == 0
+                NaN32
+            else
+                Float32(1)
+            end
+        end
         
     end
 
