@@ -3,6 +3,8 @@ module RainforestLib
     using Zarr
     using YAXArrays
     using DotEnv
+    using GeoMakie
+    using GLMakie
 
 
     sample_cube_dir = "./sample_cubes"
@@ -131,6 +133,80 @@ module RainforestLib
             end
         end
         
+    end
+
+    function local_geoaxis_creation!(
+        figure::Makie.Figure, 
+        lonlims::Tuple{Float64, Float64}, 
+        latlims::Tuple{Float64, Float64}, 
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        figure_x::Int = 1,
+        figure_y::Int = 1,
+        coastlines::Bool = true
+        )::Makie.Axis
+        
+        paddingfun = (x, y) -> x < 0 ? x-y : x + y
+
+        lon_padded = paddingfun.(lonlims, lonpadding)
+        lon_center = lon_padded[1] + ((lon_padded[2] - lon_padded[1]) / 2)
+
+
+
+        lat_padded = paddingfun.(latlims, latpadding)
+        lat_center = lat_padded[1] + ((lat_padded[2] - lat_padded[1]) / 2)
+        
+        geoaxis = GeoMakie.GeoAxis(
+            figure[figure_x, figure_y]; 
+            dest = "+proj=ortho +lon_0=$(lon_center) +lat_0=$(lat_center)",
+            # source = dest,
+            lonlims = lonlims,
+            latlims = latlims,
+            coastlines = coastlines
+        )
+
+        return geoaxis
+    end
+
+
+    function build_figure_by_lcc_classes(
+        datacube, 
+        accepted_values::Set{String}, 
+        local_map::Bool = true,
+        timestep::Int = 1,
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap::Union{Symbol, Vector{<:Colorant}} = :viridis, 
+        shading::Bool = false)::Makie.Figure
+
+        bitmask = build_bitmask_by_lccs_class(datacube[:, :, timestep], accepted_values)
+
+        fig = Figure()
+
+        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
+        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
+        lonrange = range(lon[1], lon[end], size(bitmask, 1))
+
+        # we need to flip the latitude because of an error in the datacube!!!!!
+        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
+
+        if local_map
+            ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
+        else
+            projection = "+proj=lonlat"
+            ga = GeoMakie.GeoAxis(
+                fig[1, 1]; # any cell of the figure's layout
+                dest = projection,
+                source = projection,
+                coastlines = true # plot coastlines from Natural Earth, as a reference.
+            )
+
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
+
+        end
+
+        return fig
     end
 
 end
