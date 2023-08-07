@@ -30,4 +30,10 @@ Content of the `.env` file:
 ZARR_PATH=https://s3.eu-central-1.amazonaws.com/deep-esdl-public/LC-1x2160x2160-1.0.0.zarr
 ```
 
-ich mache meinen commit
+# Goals
+
+- [ ] Walddifferenz im Vergleich zum Startpunkt 2010 in Bildern visualisieren -> GeoMakie, 3 Klassen -> grün ursprünglicher Wald; blau= neuer Wald; rot = verdrängter Wald (Denis)
+- [ ] Durch was wird verdrängter Wald ersetzt? -> Balkendiagram
+- [ ] Legende (Fabi)
+- [ ] Beschreibender Text (Kay)
+- [ ] eine nähere beispielhafte Perspektive visualisieren um Änderungen besser zu verdeutlichen (Beispiel: https://www.faszination-regenwald.de/info-center/zerstoerung/flaechenverluste/) 
