@@ -1,4 +1,4 @@
-module Categories
+module RainforestCategories
 
     struct category
         name
@@ -6,7 +6,7 @@ module Categories
         float::Float64
     end
 
-    categories=[
+    categories_list=[
         category(
             "rainforest",
             [
@@ -106,5 +106,7 @@ module Categories
             1.0
         )
     ]
+
+    categories = Dict(c.name => c for c in categories_list)
 
 end
