@@ -10,8 +10,7 @@ module Categories
         category(
             "rainforest",
             [
-                "tree_broadleaved_evergreen_closed_to_open",
-                "tree_cover_flooded_fresh_or_brakish_water"
+                "tree_broadleaved_evergreen_closed_to_open"
             ],
             0.0
         ),
@@ -29,6 +28,7 @@ module Categories
                 "tree_needleleaved_deciduous_open",
                 "tree_mixed",
                 "tree_cover_flooded_saline_water",
+                "tree_cover_flooded_fresh_or_brakish_water",
             ],
             0.1
         ),
