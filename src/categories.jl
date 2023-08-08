@@ -8,8 +8,8 @@ module RainforestCategories
         name::String
         lccs_classes::Set{String}
         float::Float64
-        lccs_flags::Array{UInt8}
-        Category(n, lccs, val) = new(n, Set(lccs), val, Set(get_lccs_flag.(lccs_classes)))
+        lccs_flags::Set{UInt8}
+        Category(n, lccs, val) = new(n, Set(lccs), val, Set(Rainforestlib_utils.get_lccs_flag.(lccs)))
     end
 
     categories_list=[
