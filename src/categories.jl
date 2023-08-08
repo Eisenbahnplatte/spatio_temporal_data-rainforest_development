@@ -1,20 +1,26 @@
 module RainforestCategories
 
-    struct category
-        name
-        lccs_classes::Array
+
+    include("utils.jl")
+    using .Rainforestlib_utils
+
+    struct Category
+        name::String
+        lccs_classes::Set{String}
         float::Float64
+        lccs_flags::Array{UInt8}
+        Category(n, lccs, val) = new(n, Set(lccs), val, Set(get_lccs_flag.(lccs_classes)))
     end
 
     categories_list=[
-        category(
+        Category(
             "rainforest",
             [
                 "tree_broadleaved_evergreen_closed_to_open"
             ],
             0.0
         ),
-        category(
+        Category(
             "forest",
             [
                 "tree_broadleaved_deciduous_closed_to_open",
@@ -32,7 +38,7 @@ module RainforestCategories
             ],
             0.1
         ),
-        category(
+        Category(
             "shrubland",
             [
                 "shrubland",
@@ -42,7 +48,7 @@ module RainforestCategories
             ],
             0.2
         ),
-        category(
+        Category(
             "flat_vegetation",
             [
                 "grassland",
@@ -50,7 +56,7 @@ module RainforestCategories
             ],
             0.3
         ),
-        category(
+        Category(
             "sparse_vegetation",
             [
                 "mosaic_natural_vegetation",
@@ -63,14 +69,14 @@ module RainforestCategories
             ],
             0.4
         ),
-        category(
+        Category(
             "no_data",
             [
                 "no_data"
             ],
             0.5
         ),
-        category(
+        Category(
             "water",
             [
                 "water",
@@ -78,7 +84,7 @@ module RainforestCategories
             ],
             0.7
         ),
-        category(
+        Category(
             "bare_areas",
             [
                 "bare_areas",
@@ -87,7 +93,7 @@ module RainforestCategories
             ],
             0.8
         ),
-        category(
+        Category(
             "cropland",
             [
                 "cropland_rainfed", 
@@ -98,7 +104,7 @@ module RainforestCategories
             ],
             0.9
         ),
-        category(
+        Category(
             "urban",
             [
                 "urban"
@@ -108,5 +114,15 @@ module RainforestCategories
     ]
 
     categories = Dict(c.name => c for c in categories_list)
+
+    function flag_to_category_val(flag::UInt8, categories::Set{Category})
+        
+        for category in categories
+            if flag in category.lccs_flags
+                return category.float
+            end
+        end
+    end
+
 
 end

@@ -5,9 +5,13 @@ module Rainforestlib
     using DotEnv
     using GeoMakie
     using GLMakie
+    import 
 
     include("./utils.jl")
     using .Rainforestlib_utils
+
+    include("categories.jl")
+    using .RainforestCategories
 
     CONFIG = DotEnv.config()
 
@@ -107,7 +111,8 @@ module Rainforestlib
         timestep::Int = 1,
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis, 
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real}, 
         shading::Bool = false)::Makie.Figure
 
         bitmask = build_bitmask_by_lccs_class(datacube[:, :, timestep], accepted_values)
@@ -136,13 +141,13 @@ module Rainforestlib
             # transforms zeros to Nans
             nan_bitmask = map(bitmask) do x
                 if x == 0.0
-                    return NaN32
+                    return Float32(NaN)
                 else
                     return x
                 end
             end
 
-            surface!(ga, lonrange, latrange, nan_bitmask; shading = shading, colormap = colormap)
+            surface!(ga, lonrange, latrange, nan_bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
 
         end
 
