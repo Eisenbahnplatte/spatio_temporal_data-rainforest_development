@@ -5,13 +5,12 @@ module Rainforestlib
     using DotEnv
     using GeoMakie
     using GLMakie
-    import 
 
     include("./utils.jl")
     using .Rainforestlib_utils
 
-    include("categories.jl")
-    using .RainforestCategories
+    include("LCCSClasses.jl")
+    using .LCCSClasses
 
     CONFIG = DotEnv.config()
 
@@ -57,17 +56,26 @@ module Rainforestlib
     
     end
 
-    function build_bitmask_by_lccs_class(local_matrix::Matrix, accepted_values::Set{String}):: Matrix{Float32}
+    function build_bitmask(local_matrix::Matrix, category::LCCSClasses.Category)
+
+        return build_bitmask(local_matrix, category.lccs_flags)
+    end
+
+    function build_bitmask(local_matrix::Matrix, lccs_classes::Set{String}):: Matrix{Float32}
 
         # fetch the flag values for each string item
-        flag_vals = get_lccs_flag.(accepted_values)
+        flag_vals = get_lccs_flag.(lccs_classes)
 
+        return build_bitmask(local_matrix, flag_vals)
+        
+    end
+
+    function build_bitmask(local_matrix::Matrix, flag_vals::Set{UInt8})
         # generate the bitmask by broadcasting the isin function
         bitmask = in.(local_matrix, Ref(flag_vals))
 
         # last step is for converting to NaN and 
         return bitmask
-        
     end
 
     function local_geoaxis_creation!(
@@ -115,7 +123,7 @@ module Rainforestlib
         colorrange::Tuple{<:Real, <:Real}, 
         shading::Bool = false)::Makie.Figure
 
-        bitmask = build_bitmask_by_lccs_class(datacube[:, :, timestep], accepted_values)
+        bitmask = build_bitmask(datacube[:, :, timestep], accepted_values)
 
         fig = Figure()
 
@@ -201,7 +209,7 @@ module Rainforestlib
         timestep::Int = 1,
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap::Union{Symbol, Vector{<:Colorant}} = :viridis, 
+        colormap = :viridis, 
         shading::Bool = false)::Makie.Figure
 
         bitmask = build_bitmask_all_classes(datacube[:, :, timestep])
@@ -239,7 +247,7 @@ module Rainforestlib
         accepted_values::Set{String}; 
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap::Union{Symbol, Vector{<:Colorant}} = :viridis, 
+        colormap = :viridis, 
         shading::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = Nothing
     )::Makie.Figure
@@ -248,7 +256,6 @@ module Rainforestlib
         fig = isnothing(resolution) ?  Figure(resolution = resolution) : Figure()
 
         timesteps = YAXArrays.getAxis("time", datacube).values
-        timesteps_num = size(datacube, 3)
 
         last = 0.0
 
@@ -259,7 +266,7 @@ module Rainforestlib
 
             year = timesteps[t]
 
-            bitmask = build_bitmask_by_lccs_class(datacube[:, :, t], accepted_values)
+            bitmask = build_bitmask(datacube[:, :, t], accepted_values)
 
             number_of_rf_pixels = sum(filter(!isnan, bitmask))
             
@@ -284,21 +291,73 @@ module Rainforestlib
         return fig
     end
 
-
-    function get_figures_over_time(
+    function build_diff_figure(
         datacube,
-        accepted_values::Set{String}; 
+        timestep::Int,
+        previous_mask::Matrix,
+        tracked_category::LCCSClasses.Category;
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap::Union{Symbol, Vector{<:Colorant}} = :viridis, 
+        colormap = :viridis, 
         shading::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}}
+        resolution::Union{Nothing, Tuple{Int, Int}} = Nothing
+    )::Tuple{Figure, Matrix}
+
+        timesteps = YAXArrays.getAxis("time", datacube).values
+
+        year = timesteps[timestep]
+
+        bitmask::Matrix = build_bitmask(datacube[:, :, timestep], tracked_category)
+
+
+        diff_bitmask = Rainforestlib_utils.diff_matrices(bitmask, previous_mask) do new, old
+            if old == new
+                return old
+            else
+                if old < new
+                    # this means something got added
+                    return Float32(2)
+                else
+                    # this means something previously selected got unselected
+                    return Float32(3)
+                end
+            end
+        end
+
+        number_of_rf_pixels = sum(filter(!isnan, bitmask))
+        
+
+        println("Number of rainforest pixels in $(year): $(number_of_rf_pixels)")
+
+        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
+        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
+        lonrange = range(lon[1], lon[end], size(diff_bitmask, 1))
+
+        fig = fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+
+        # we need to flip the latitude because of an error in the datacube!!!!!
+        latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
+
+        ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
+        surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap)
+
+        return fig, bitmask
+    end
+
+
+
+    function build_diff_figures_over_time(
+        datacube,
+        tracked_category::LCCSClasses.Category; 
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap = :viridis, 
+        shading::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing
     )::Array{Figure}
         # build one figure with diffs for each timestep
 
         timesteps = YAXArrays.getAxis("time", datacube).values
-
-        last = 0.0
 
         lonsize = length(YAXArrays.getAxis("lon", datacube).values)
         latsize = length(YAXArrays.getAxis("lat", datacube).values)
@@ -310,47 +369,21 @@ module Rainforestlib
         # 3 is the time dimension
         for t in range(1, length(timesteps))
 
-            year = timesteps[t]
+            figure, new_bitmask = build_diff_figure(
+                datacube, 
+                t, 
+                last_bitmask, 
+                tracked_category; 
+                lonpadding = lonpadding,
+                latpadding = latpadding,
+                colormap = colormap,
+                shading = shading,
+                resolution = resolution 
+            )
 
-            bitmask = build_bitmask_by_lccs_class(datacube[:, :, t], accepted_values)
+            last_bitmask = new_bitmask
 
-
-            diff_bitmask = diff_matrices(bitmask, last_bitmask) do new, old
-                if old == new
-                    return old
-                else
-                    if old < new
-                        # this means something got added
-                        return 0.5
-                    else
-                        return -0.5
-                    end
-                end
-            end
-
-            last_bitmask = bitmask
-
-            number_of_rf_pixels = sum(filter(!isnan, bitmask))
-            
-
-            println("Number of rainforest pixels in $(year): $(number_of_rf_pixels)")
-            println("Diff to last: $(number_of_rf_pixels - last)")
-
-            last = number_of_rf_pixels
-
-            lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
-            lat = YAXArrays.getAxis("lat", datacube).values |> extrema
-            lonrange = range(lon[1], lon[end], size(diff_bitmask, 1))
-
-            fig = fig = isnothing(resolution) ?  Figure(resolution = resolution) : Figure()
-
-            # we need to flip the latitude because of an error in the datacube!!!!!
-            latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
-
-            ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
-            surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap)
-
-            push!(results, fig)
+            push!(results, figure)
         end
         
         return results
