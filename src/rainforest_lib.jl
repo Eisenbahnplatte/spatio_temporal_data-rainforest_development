@@ -348,15 +348,17 @@ module Rainforestlib
 
     function build_diff_figures_over_time(
         datacube,
-        tracked_category::LCCSClasses.Category; 
+        tracked_category::LCCSClasses.Category,
+        target_path::String;
+        name_base::String = "figure", 
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
         colormap = :viridis, 
         shading::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing
-    )::Array{Figure}
+    )::Nothing
         # build one figure with diffs for each timestep
-
+        mapCube
         timesteps = YAXArrays.getAxis("time", datacube).values
 
         lonsize = length(YAXArrays.getAxis("lon", datacube).values)
@@ -364,10 +366,10 @@ module Rainforestlib
 
         last_bitmask = zeros(lonsize, latsize)
 
-        results = []
-
         # 3 is the time dimension
         for t in range(1, length(timesteps))
+
+            filename = "$(target_path)/$(name_base)_$(t).png"
 
             figure, new_bitmask = build_diff_figure(
                 datacube, 
@@ -383,10 +385,8 @@ module Rainforestlib
 
             last_bitmask = new_bitmask
 
-            push!(results, figure)
+            save(filename, figure)
         end
-        
-        return results
     end
 
 end
