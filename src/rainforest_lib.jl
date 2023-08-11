@@ -56,23 +56,23 @@ module Rainforestlib
     
     end
 
-    function build_bitmask(local_matrix::Matrix, category::LCCSClasses.Category)
+    function build_bitmask(local_matrix::Matrix, category::LCCSClasses.Category; set_nan::Bool = false)::Matrix{Float32}
 
-        return build_bitmask(local_matrix, category.lccs_flags)
+        return build_bitmask(local_matrix, category.lccs_flags; set_nan = set_nan)
     end
 
-    function build_bitmask(local_matrix::Matrix, lccs_classes::Set{String}):: Matrix{Float32}
+    function build_bitmask(local_matrix::Matrix, lccs_classes::Set{String}; set_nan::Bool = false):: Matrix{Float32}
 
         # fetch the flag values for each string item
-        flag_vals = get_lccs_flag.(lccs_classes)
+        flag_vals = Set(get_lccs_flag.(lccs_classes))
 
-        return build_bitmask(local_matrix, flag_vals)
+        return build_bitmask(local_matrix, flag_vals; set_nan = set_nan)
         
     end
 
-    function build_bitmask(local_matrix::Matrix, flag_vals::Set{UInt8})
+    function build_bitmask(local_matrix::Matrix, flag_vals::Set{UInt8}; set_nan::Bool = false)::Matrix{Float32}
         # generate the bitmask by broadcasting the isin function
-        bitmask = in.(local_matrix, Ref(flag_vals))
+        bitmask = set_nan ? Rainforestlib_utils.replace_zero_with_nan.(Float32.(in.(local_matrix, Ref(flag_vals)))) : Float32.(in.(local_matrix, Ref(flag_vals)))
 
         # last step is for converting to NaN and 
         return bitmask
@@ -120,12 +120,14 @@ module Rainforestlib
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
         colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real}, 
-        shading::Bool = false)::Makie.Figure
+        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
+        shading::Bool = false,
+        set_nan::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
 
-        bitmask = build_bitmask(datacube[:, :, timestep], accepted_values)
+        bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
 
-        fig = Figure()
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
@@ -136,7 +138,7 @@ module Rainforestlib
 
         if local_map
             ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
         else
             projection = "+proj=lonlat"
             ga = GeoMakie.GeoAxis(
@@ -146,16 +148,7 @@ module Rainforestlib
                 coastlines = true # plot coastlines from Natural Earth, as a reference.
             )
 
-            # transforms zeros to Nans
-            nan_bitmask = map(bitmask) do x
-                if x == 0.0
-                    return Float32(NaN)
-                else
-                    return x
-                end
-            end
-
-            surface!(ga, lonrange, latrange, nan_bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
 
         end
 
@@ -198,10 +191,12 @@ module Rainforestlib
     end
 
 
-    function build_bitmask_all_classes(datacube)::Matrix
+    function build_bitmask_all_classes(datacube; set_nan::Bool = false)::Matrix
     
-        return Rainforestlib_utils.get_float_repr.(datacube)
+        return set_nan ? Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
     end
+
+
 
     function build_figure_all_classes(
         datacube; 
@@ -210,11 +205,14 @@ module Rainforestlib
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
         colormap = :viridis, 
-        shading::Bool = false)::Makie.Figure
+        colorrange::Tuple{<:Real, <:Real} = (0, 1),
+        shading::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        set_nan::Bool = false)::Makie.Figure
 
-        bitmask = build_bitmask_all_classes(datacube[:, :, timestep])
+        bitmask = build_bitmask_all_classes(datacube[:, :, timestep], set_nan = set_nan)
 
-        fig = Figure()
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
@@ -225,7 +223,7 @@ module Rainforestlib
 
         if local_map
             ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
         else
             projection = "+proj=lonlat"
             ga = GeoMakie.GeoAxis(
@@ -247,13 +245,14 @@ module Rainforestlib
         accepted_values::Set{String}; 
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis, 
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 1),
         shading::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = Nothing
-    )::Makie.Figure
+        resolution::Union{Nothing, Tuple{Int, Int}} = Nothing,
+        set_nan::Bool = false)::Makie.Figure
 
 
-        fig = isnothing(resolution) ?  Figure(resolution = resolution) : Figure()
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         timesteps = YAXArrays.getAxis("time", datacube).values
 
@@ -261,12 +260,12 @@ module Rainforestlib
 
         # 3 is the time dimension
         for t in range(1, length(timesteps))
-            y_val = (t % 3) + 1 
+            y_val = (t % 3) 
             x_val = t ÷ 3
 
             year = timesteps[t]
 
-            bitmask = build_bitmask(datacube[:, :, t], accepted_values)
+            bitmask = build_bitmask(datacube[:, :, t], accepted_values; set_nan = set_nan)
 
             number_of_rf_pixels = sum(filter(!isnan, bitmask))
             
@@ -284,7 +283,7 @@ module Rainforestlib
             latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
 
             ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, figure_x = x_val, figure_y = y_val, title = "Plot $(year)")
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
         
         end
         
@@ -294,21 +293,27 @@ module Rainforestlib
     function build_diff_figure(
         datacube,
         timestep::Int,
-        previous_mask::Matrix,
+        previous_mask::Union{Nothing, Matrix},
         tracked_category::LCCSClasses.Category;
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis, 
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
         shading::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = Nothing
-    )::Tuple{Figure, Matrix}
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing
+        )::Tuple{Figure, Matrix}
 
         timesteps = YAXArrays.getAxis("time", datacube).values
 
         year = timesteps[timestep]
 
-        bitmask::Matrix = build_bitmask(datacube[:, :, timestep], tracked_category)
+        # cant use set NaN here because NaN != NaN
+        bitmask::Matrix = build_bitmask(datacube[:, :, timestep], tracked_category; set_nan = false)
 
+        # if there is no previous mask use identity as diff
+        if isnothing(previous_mask)
+            previous_mask = bitmask
+        end
 
         diff_bitmask = Rainforestlib_utils.diff_matrices(bitmask, previous_mask) do new, old
             if old == new
@@ -333,13 +338,13 @@ module Rainforestlib
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
         lonrange = range(lon[1], lon[end], size(diff_bitmask, 1))
 
-        fig = fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         # we need to flip the latitude because of an error in the datacube!!!!!
         latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
 
         ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
-        surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap)
+        surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
 
         return fig, bitmask
     end
@@ -353,18 +358,15 @@ module Rainforestlib
         name_base::String = "figure", 
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis, 
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
         shading::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing
     )::Nothing
         # build one figure with diffs for each timestep
-        mapCube
         timesteps = YAXArrays.getAxis("time", datacube).values
 
-        lonsize = length(YAXArrays.getAxis("lon", datacube).values)
-        latsize = length(YAXArrays.getAxis("lat", datacube).values)
-
-        last_bitmask = zeros(lonsize, latsize)
+        last_bitmask = nothing
 
         # 3 is the time dimension
         for t in range(1, length(timesteps))
@@ -380,7 +382,8 @@ module Rainforestlib
                 latpadding = latpadding,
                 colormap = colormap,
                 shading = shading,
-                resolution = resolution 
+                resolution = resolution,
+                colorrange = colorrange
             )
 
             last_bitmask = new_bitmask

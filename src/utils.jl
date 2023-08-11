@@ -16,5 +16,12 @@ module Rainforestlib_utils
         return result
     end
 
+
+    function replace_zero_with_nan(x::Real)
+
+        return x != 0 || isnan(x) ? x : NaN32
+    
+    end
+
     
 end

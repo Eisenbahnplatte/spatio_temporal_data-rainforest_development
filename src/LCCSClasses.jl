@@ -100,7 +100,7 @@ module LCCSClasses
             [
                 "tree_broadleaved_evergreen_closed_to_open"
             ],
-            0.0
+            0.1
         ),
         Category(
             "forest",
@@ -118,7 +118,7 @@ module LCCSClasses
                 "tree_cover_flooded_saline_water",
                 "tree_cover_flooded_fresh_or_brakish_water",
             ],
-            0.1
+            0.2
         ),
         Category(
             "shrubland",
@@ -128,7 +128,7 @@ module LCCSClasses
                 "shrubland_deciduous",
                 "shrub_or_herbaceous_cover_flooded",
             ],
-            0.2
+            0.3
         ),
         Category(
             "flat_vegetation",
@@ -136,7 +136,7 @@ module LCCSClasses
                 "grassland",
                 "lichens_and_mosses",
             ],
-            0.3
+            0.4
         ),
         Category(
             "sparse_vegetation",
@@ -149,14 +149,14 @@ module LCCSClasses
                 "sparse_shrub",
                 "sparse_herbaceous",
             ],
-            0.4
+            0.5
         ),
         Category(
             "no_data",
             [
                 "no_data"
             ],
-            0.5
+            0.6
         ),
         Category(
             "water",
@@ -197,9 +197,9 @@ module LCCSClasses
 
     categories = Dict(c.name => c for c in categories_list)
 
-    function flag_to_category_val(flag::UInt8, categories::Set{Category})::Float32
+    function flag_to_category_val(flag::UInt8)::Float32
         
-        for category in categories
+        for (_, category) in categories
             if flag in category.lccs_flags
                 return Float32(category.float)
             end
