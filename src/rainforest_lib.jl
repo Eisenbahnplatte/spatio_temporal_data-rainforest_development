@@ -78,6 +78,31 @@ module Rainforestlib
         return bitmask
     end
 
+    function filter_bitmask(bitmask, accepted_values::Set{Float64})::Matrix{Float32}
+        return Rainforestlib_utils.filter_matched_items.(bitmask, Ref(accepted_values))
+    end    
+
+    # function categorize_bitmask(bitmask, categories::Dict)::Matrix{Float32}
+    #     i = 0.0
+    #     categorized_bitmask = Matrix{Float32}
+
+    #     function replace_number_with_category_index(x::Real, i::Float64)
+
+    #         return i
+        
+    #     end
+
+
+    #     for (key, value) in categories
+
+    #         flag_vals = Set(get_lccs_flag.(categories[key].lccs_classes))
+    #         categorized_bitmask = replace_number_with_category_index.(Float32.(in.(bitmask, Ref(flag_vals))), i)
+    #         i = i + 1.0
+    #     end
+
+    #     return categorized_bitmask
+    # end
+
     function local_geoaxis_creation!(
         figure::Makie.Figure, 
         lonlims::Tuple{Float64, Float64}, 
@@ -126,6 +151,60 @@ module Rainforestlib
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
 
         bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
+
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+
+        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
+        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
+        lonrange = range(lon[1], lon[end], size(bitmask, 1))
+
+        # we need to flip the latitude because of an error in the datacube!!!!!
+        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
+
+        if local_map
+            ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+        else
+            projection = "+proj=lonlat"
+            ga = GeoMakie.GeoAxis(
+                fig[1, 1]; # any cell of the figure's layout
+                dest = projection,
+                source = projection,
+                coastlines = true # plot coastlines from Natural Earth, as a reference.
+            )
+
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+
+        end
+
+        return fig
+    end
+
+
+    function build_figure_by_categories(
+        datacube, 
+        categories::Dict{String, LCCSClasses.Category};
+        local_map::Bool = true,
+        timestep::Int = 1,
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
+        shading::Bool = false,
+        set_nan::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
+
+        accepted_values = Set{Float64}()
+        for (key, value) in categories
+            accepted_values = union(accepted_values, categories[key].float)
+        end
+
+        print(accepted_values)
+
+
+        bitmask = build_bitmask_all_classes(datacube[:, :, timestep], set_nan = set_nan)
+
+        bitmask = filter_bitmask(bitmask, accepted_values)
 
         fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 

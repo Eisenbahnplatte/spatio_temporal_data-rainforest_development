@@ -23,5 +23,9 @@ module Rainforestlib_utils
     
     end
 
+    function filter_matched_items(x::Real, list::Set{Float64})
+        return in(x,list) ? x : NaN32
+    end
+
     
 end
