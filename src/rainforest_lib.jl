@@ -23,7 +23,7 @@ module Rainforestlib
     end
 
 
-    function rough_spatial_filter(cube; lon_bounds = (-90,-30), lat_bounds = (-30, 15), time_bounds = (Date(2010), Date(2012)))
+    function rough_spatial_filter(cube; lon_bounds = (-90,-30), lat_bounds = (-30, 15), time_bounds = (Date(2010), Date(2021)))
 
             return cube[lon = lon_bounds, lat = lat_bounds, time = time_bounds]
     end
