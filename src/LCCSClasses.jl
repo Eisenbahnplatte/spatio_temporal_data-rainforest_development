@@ -199,13 +199,18 @@ module LCCSClasses
 
     function flag_to_category_val(flag::UInt8)::Float32
         
-        for (_, category) in categories
+        return get_category_val_for_selected_categories(flag, Set(categories_list))
+    end
+
+    function get_category_val_for_selected_categories(flag::UInt8, selected_categories::Set{Category})
+        
+        for category in selected_categories
             if flag in category.lccs_flags
                 return Float32(category.float)
             end
         end
 
-        return Float32(NaN)
+        return Float32(NaN) 
     end
 
 

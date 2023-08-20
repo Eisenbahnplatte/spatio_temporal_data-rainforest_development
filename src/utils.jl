@@ -6,7 +6,7 @@ module Rainforestlib_utils
 
         result = zeros(rows, cols)
 
-        for r in range(1, rows)
+        Threads.@threads for r in range(1, rows)
             for c in range(1, cols)
 
                 result[r, c] = difffun(matrix1[r, c], matrix2[r, c])

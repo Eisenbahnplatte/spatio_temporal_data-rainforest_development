@@ -5,6 +5,8 @@ module Rainforestlib
     using DotEnv
     using GeoMakie
     using GLMakie
+    using Colors, ColorSchemes
+
 
     include("./utils.jl")
     using .Rainforestlib_utils
@@ -56,12 +58,12 @@ module Rainforestlib
     
     end
 
-    function build_bitmask(local_matrix::Matrix, category::LCCSClasses.Category; set_nan::Bool = false)::Matrix{Float32}
+    function build_bitmask(local_matrix::Matrix{UInt8}, category::LCCSClasses.Category; set_nan::Bool = false)::Matrix{Float32}
 
         return build_bitmask(local_matrix, category.lccs_flags; set_nan = set_nan)
     end
 
-    function build_bitmask(local_matrix::Matrix, lccs_classes::Set{String}; set_nan::Bool = false):: Matrix{Float32}
+    function build_bitmask(local_matrix::Matrix{UInt8}, lccs_classes::Set{String}; set_nan::Bool = false):: Matrix{Float32}
 
         # fetch the flag values for each string item
         flag_vals = Set(get_lccs_flag.(lccs_classes))
@@ -70,7 +72,7 @@ module Rainforestlib
         
     end
 
-    function build_bitmask(local_matrix::Matrix, flag_vals::Set{UInt8}; set_nan::Bool = false)::Matrix{Float32}
+    function build_bitmask(local_matrix::Matrix{UInt8}, flag_vals::Set{UInt8}; set_nan::Bool = false)::Matrix{Float32}
         # generate the bitmask by broadcasting the isin function
         bitmask = set_nan ? Rainforestlib_utils.replace_zero_with_nan.(Float32.(in.(local_matrix, Ref(flag_vals)))) : Float32.(in.(local_matrix, Ref(flag_vals)))
 
@@ -81,6 +83,15 @@ module Rainforestlib
     function filter_bitmask(bitmask, accepted_values::Set{Float64})::Matrix{Float32}
         return Rainforestlib_utils.filter_matched_items.(bitmask, Ref(accepted_values))
     end    
+
+    function build_category_mask(local_matrix::Matrix{UInt8})
+        return LCCSClasses.flag_to_category_val.(local_matrix)
+    end
+
+    function build_selected_categorial_mask(local_matrix::Matrix{UInt8}, selected_categories::Set{LCCSClasses.Category})
+    
+        return LCCSClasses.get_category_val_for_selected_categories.(local_matrix, Ref(selected_categories))
+    end
 
     # function categorize_bitmask(bitmask, categories::Dict)::Matrix{Float32}
     #     i = 0.0
@@ -183,7 +194,7 @@ module Rainforestlib
 
     function build_figure_by_categories(
         datacube, 
-        categories::Dict{String, LCCSClasses.Category};
+        categories::Set{LCCSClasses.Category};
         local_map::Bool = true,
         timestep::Int = 1,
         lonpadding::Float64 = 1.0, 
@@ -191,21 +202,11 @@ module Rainforestlib
         colormap = :viridis,
         colorrange::Tuple{<:Real, <:Real} = (0, 1), 
         shading::Bool = false,
-        set_nan::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
 
-        accepted_values = Set{Float64}()
-        for (key, value) in categories
-            accepted_values = union(accepted_values, categories[key].float)
-        end
 
-        print(accepted_values)
-
-
-        bitmask = build_bitmask_all_classes(datacube[:, :, timestep], set_nan = set_nan)
-
-        bitmask = filter_bitmask(bitmask, accepted_values)
-
+        bitmask = build_selected_categorial_mask(datacube[:, :, timestep], categories)
+        
         fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
@@ -272,7 +273,7 @@ module Rainforestlib
 
     function build_bitmask_all_classes(datacube; set_nan::Bool = false)::Matrix
     
-        return set_nan ? Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
+        return set_nan ?  Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
     end
 
 
@@ -398,7 +399,7 @@ module Rainforestlib
             if old == new
                 return old
             else
-                if old < new
+                if new > old
                     # this means something got added
                     return Float32(2)
                 else
@@ -437,16 +438,28 @@ module Rainforestlib
         name_base::String = "figure", 
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
+        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
         shading::Bool = false,
+        gradual_diff::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing
     )::Nothing
         # build one figure with diffs for each timestep
         timesteps = YAXArrays.getAxis("time", datacube).values
 
-        last_bitmask = nothing
+        if gradual_diff
+            last_bitmask = nothing
+        else
+            # set it to the first bitmask and dont change it anymore
+            last_bitmask = build_bitmask(datacube[:, :, 1], tracked_category; set_nan = false)
+        end
 
+        colormap = [
+            RGB(1.0, 1.0, 1.0),  # White
+            RGB(0.0, 1.0, 0.0),  # Green
+            RGB(0.0, 0.0, 1.0),  # Blue
+            RGB(1.0, 0.0, 0.0),  # Red
+        ]
+        
         # 3 is the time dimension
         for t in range(1, length(timesteps))
 
@@ -465,7 +478,9 @@ module Rainforestlib
                 colorrange = colorrange
             )
 
-            last_bitmask = new_bitmask
+            if gradual_diff
+                last_bitmask = new_bitmask
+            end
 
             save(filename, figure)
         end
