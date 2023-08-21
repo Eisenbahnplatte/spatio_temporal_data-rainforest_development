@@ -36,7 +36,7 @@ important! code works only with YAXArrays v0.4.6
 # Goals
 
 - [x] Walddifferenz im Vergleich zum Startpunkt 2010 in Bildern visualisieren -> GeoMakie, 3 Klassen -> grün ursprünglicher Wald; blau= neuer Wald; rot = verdrängter Wald (Denis)
-- [ ] Durch was wird verdrängter Wald ersetzt? -> Balkendiagram
+- [x] Durch was wird verdrängter Wald ersetzt? -> Balkendiagram
 - [ ] Legende (Fabi)
 - [ ] Beschreibender Text (Kay)
 - [ ] eine nähere beispielhafte Perspektive visualisieren um Änderungen besser zu verdeutlichen (Beispiel: https://www.faszination-regenwald.de/info-center/zerstoerung/flaechenverluste/) 
