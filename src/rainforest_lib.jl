@@ -2,11 +2,11 @@ module Rainforestlib
 
     using Zarr
     using YAXArrays
-    using DotEnv
+    import DotEnv
     using GeoMakie
     using GLMakie
+    using CairoMakie
     using Colors, ColorSchemes
-
 
     include("./utils.jl")
     using .Rainforestlib_utils
@@ -486,4 +486,150 @@ module Rainforestlib
         end
     end
 
+
+
+    function count_replacement(old_flag_matrix::Matrix{UInt8}, new_flag_matrix::Matrix{UInt8}, tracked_category::LCCSClasses.Category; reverse::Bool = false)::Dict{UInt8, Int64}
+        # it is assumed that both have the same size
+    
+        result = Dict()
+    
+        (rows, cols) = size(old_flag_matrix)
+        for row in 1:rows
+            for col in 1:cols
+                if reverse
+                    tracked_compared_value = new_flag_matrix[row, col]
+                    other_value = old_flag_matrix[row, col]
+                else
+                    tracked_compared_value = old_flag_matrix[row, col]
+                    other_value = new_flag_matrix[row, col]
+                end
+    
+                if tracked_compared_value != other_value && tracked_compared_value in tracked_category.lccs_flags 
+    
+                    if other_value in keys(result)
+                        result[other_value] += 1
+                    else
+                        result[other_value] = 1
+                    end
+                end
+            end
+        end
+    
+        return result
+    
+    end
+
+    function get_replacement_data(
+        datacube,
+        timestep::Int,
+        tracked_category::LCCSClasses.Category;
+        reverse::Bool = false
+    )::Tuple{Vector{Int}, Vector{Int}, Vector{Int}, Vector{UInt8}}
+
+        
+        # step number is aways one smaller then the start
+        step = timestep - 1
+    
+        results_dict = count_replacement(datacube[:, :, timestep-1], datacube[:, :, timestep], tracked_category; reverse = reverse)
+    
+        sorted_result_keys = sort!([k for k in keys(results_dict)])
+    
+    
+        x_vals = fill(step, length(sorted_result_keys))
+    
+        y_vals = [results_dict[k] for k in sorted_result_keys]
+    
+        grp = 1:length(sorted_result_keys)
+    
+    
+        return (x_vals, y_vals, grp, sorted_result_keys)
+    
+    end
+
+
+    function build_replacement_figure(
+        datacube,
+        tracked_category::LCCSClasses.Category;
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        reverse::Bool = false
+    )::Makie.Figure
+    
+        timesteps = YAXArrays.getAxis("time", datacube).values
+    
+    
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+    
+        x_vals = Vector{Int}()
+        y_vals = Vector{Int}()
+        gpr_vals = Vector{Int}()
+        color_mapping_vals = Vector{Int}()
+    
+        xaxis_names = Vector{String}()
+
+    
+        for timestep in eachindex(timesteps)
+
+            if timestep == 1
+                # there is no diff for the first time step
+                continue
+            end
+    
+            new_year = timesteps[timestep]
+
+            push!(xaxis_names, string(new_year))
+
+            x, y, gpr, color_mappings = get_replacement_data(
+                datacube,
+                timestep,
+                tracked_category;
+                reverse = reverse
+            )
+
+            x_vals = [x_vals; x]
+            y_vals = [y_vals; y]
+            gpr_vals = [gpr_vals; gpr]
+            color_mapping_vals = [color_mapping_vals; color_mappings]
+            
+        end   
+
+        colors = ColorSchemes.tab20
+
+        # colors = Makie.wong_colors()
+
+        
+        ax = Axis(
+            fig[1,1], 
+            xticks = (1:length(xaxis_names), xaxis_names),
+            title = "Replacement of Rainforest pixels by year"
+        )
+    
+        
+
+        # Creating a legend
+
+        sorted_possible_vals = sort([k for k in Set(color_mapping_vals)])
+
+        color_index_mapping = Dict([v => i for (i, v) in enumerate([k for k in sorted_possible_vals])])
+
+        labels = LCCSClasses.get_lccs_name.(UInt8.(sorted_possible_vals))
+
+        elements = [PolyElement(polycolor = colors[i]) for (i, _) in enumerate(labels)]
+
+        title = "LCCS Classes"
+
+
+        # generate the barplot
+
+        barplot!(
+            ax,
+            x_vals,
+            y_vals,
+            dodge = gpr_vals,
+            color = colors[[color_index_mapping[v] for v in color_mapping_vals]],
+        )
+
+        Legend(fig[1,2], elements, labels, title)
+    
+        return fig
+    end
 end
