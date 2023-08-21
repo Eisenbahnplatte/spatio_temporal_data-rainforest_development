@@ -1,6 +1,6 @@
 module LCCSClasses
 
-    export get_lccs_flag, get_lccs_name
+    export get_lccs_flag, get_lccs_name, merge_categories
 
     vals = [
         "no_data",
@@ -211,6 +211,11 @@ module LCCSClasses
         end
 
         return Float32(NaN) 
+    end
+
+    function merge_categories(name::String, value_rep::Float64, categories::Set{Category})::Category
+
+        return Category(name, union([x.lccs_classes for x in categories]...), value_rep)
     end
 
 

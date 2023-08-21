@@ -493,6 +493,11 @@ module Rainforestlib
         # it is assumed that both have the same size
     
         result = Dict()
+
+        function check_if_replacement(tracked_value::UInt8, other_value::UInt8, tracked_category::LCCSClasses.Category)
+            # checks if the values are unequal, if the tracked values is in the tracked category and if the other value is not in the tracked category
+            return tracked_value != other_value && tracked_value in tracked_category.lccs_flags && !(other_value in tracked_category.lccs_flags)
+        end
     
         (rows, cols) = size(old_flag_matrix)
         for row in 1:rows
@@ -504,8 +509,9 @@ module Rainforestlib
                     tracked_compared_value = old_flag_matrix[row, col]
                     other_value = new_flag_matrix[row, col]
                 end
-    
-                if tracked_compared_value != other_value && tracked_compared_value in tracked_category.lccs_flags 
+                
+                
+                if check_if_replacement(tracked_compared_value, other_value, tracked_category)
     
                     if other_value in keys(result)
                         result[other_value] += 1
@@ -632,6 +638,120 @@ module Rainforestlib
 
         Legend(fig[1,2], elements, labels, title)
     
+        return fig
+    end
+
+
+    function rainforest_diff_over_time(
+        datacube,
+        tracked_category::LCCSClasses.Category; 
+        resolution::Union{Nothing, Tuple{Int, Int}} = Nothing,
+        gradual_diff::Bool = false,
+        )::Makie.Figure
+
+
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+
+        timesteps = YAXArrays.getAxis("time", datacube).values
+
+        
+
+        colormap = [
+            RGB(0.0, 1.0, 0.0),  # Green
+            RGB(1.0, 0.0, 0.0),  # Red
+        ]
+
+        
+        # set it to the first bitmask and dont change it anymore
+        last_bitmask = build_bitmask(datacube[:, :, 1], tracked_category; set_nan = false)
+        
+
+        x_vals = Vector{Int}()
+        y_vals = Vector{Int}()
+        grp_vals = Vector{Int}()
+
+        xaxis_names = Vector{String}()
+
+        last_raw_count = 0.0
+
+        # 3 is the time dimension
+        for t in eachindex(timesteps)
+
+            current_year = timesteps[t]
+
+            push!(xaxis_names, string(year(current_year)))
+
+            bitmask = build_bitmask(datacube[:, :, t], tracked_category; set_nan = false)
+
+            diff_bitmask = Rainforestlib_utils.diff_matrices(bitmask, last_bitmask) do new, old
+                if old == new
+                    return old
+                else
+                    if new > old
+                        # this means something got added
+                        return Float32(2)
+                    else
+                        # this means something previously selected got unselected
+                        return Float32(3)
+                    end
+                end
+            end
+
+            raw_tracked_number = sum(filter(!isnan, bitmask))
+            
+            added_vals = sum(map(diff_bitmask) do x
+                if x == 2
+                    return 1
+                else
+                    0
+                end                
+            end)
+
+            removed_vals = sum(map(diff_bitmask) do x
+                if x == 3
+                    return 1
+                else
+                    0
+                end                
+            end)
+
+
+            append!(x_vals, [t, t])
+            append!(y_vals, [added_vals, removed_vals])
+            append!(grp_vals, [1, 2])
+
+            println("Number of rainforest pixels in $(year(current_year)): $(raw_tracked_number)")
+            println("Diff to last: $(raw_tracked_number - last_raw_count)")
+
+            last_raw_count = raw_tracked_number
+
+            if gradual_diff
+                last_bitmask = bitmask
+            end
+        
+        end
+
+        ax = Axis(
+            fig[1,1], 
+            xticks = (1:length(xaxis_names), xaxis_names),
+            title = "Change of Rainforest pixels by year"
+        )
+
+        labels = ["added values", "removed values"]
+        elements = [PolyElement(polycolor = color) for color in colormap]
+        title = "Change Types"
+
+        Legend(fig[1,2], elements, labels, title)
+
+        barplot!(
+            ax,
+            x_vals,
+            y_vals,
+            dodge = grp_vals,
+            color = grp_vals,
+            colormap = colormap
+        )
+        
         return fig
     end
 end
