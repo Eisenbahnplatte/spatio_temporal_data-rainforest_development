@@ -27,5 +27,5 @@ module Rainforestlib_utils
         return in(x,list) ? x : NaN32
     end
 
-    
+
 end
