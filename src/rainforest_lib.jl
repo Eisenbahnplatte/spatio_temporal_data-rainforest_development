@@ -7,6 +7,7 @@ module Rainforestlib
     using GLMakie
     using CairoMakie
     using Colors, ColorSchemes
+    using Dates
 
     include("./utils.jl")
     using .Rainforestlib_utils
@@ -573,10 +574,11 @@ module Rainforestlib
                 # there is no diff for the first time step
                 continue
             end
-    
+            
+            old_year = timesteps[timestep-1]
             new_year = timesteps[timestep]
 
-            push!(xaxis_names, string(new_year))
+            push!(xaxis_names, string(year(old_year)) * " to " * string(year(new_year)))
 
             x, y, gpr, color_mappings = get_replacement_data(
                 datacube,
