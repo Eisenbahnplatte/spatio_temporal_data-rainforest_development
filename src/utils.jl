@@ -6,7 +6,7 @@ module Rainforestlib_utils
 
         result = zeros(rows, cols)
 
-        for r in range(1, rows)
+        Threads.@threads for r in range(1, rows)
             for c in range(1, cols)
 
                 result[r, c] = difffun(matrix1[r, c], matrix2[r, c])
@@ -23,5 +23,9 @@ module Rainforestlib_utils
     
     end
 
-    
+    function filter_matched_items(x::Real, list::Set{Float64})
+        return in(x,list) ? x : NaN32
+    end
+
+
 end
