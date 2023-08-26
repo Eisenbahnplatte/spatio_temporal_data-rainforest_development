@@ -14,9 +14,9 @@ module Rainforestlib
     # include the other module called LCCSClasses, where categories were defined
     include("LCCSClasses.jl")
     using .LCCSClasses
-    # load metadata link
+    
     CONFIG = DotEnv.config()
-
+    # load metadata link
     function get_lcc_datacube()
         zarr = Zarr.zopen(CONFIG["ZARR_PATH"])
         lc_dataset = YAXArrays.open_dataset(zarr)
@@ -24,7 +24,7 @@ module Rainforestlib
     end
 
     # get a rough extent of South America to decrease the amount of data
-    function rough_spatial_filter(cube; lon_bounds = (-90,-30), lat_bounds = (-30, 15), time_bounds = (Date(2010), Date(2021)))
+    function rough_spatial_filter(cube; lon_bounds = (-83,-30), lat_bounds = (-20, 4), time_bounds = (Date(2010), Date(2021)))
 
             return cube[lon = lon_bounds, lat = lat_bounds, time = time_bounds]
     end
