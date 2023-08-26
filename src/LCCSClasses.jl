@@ -1,7 +1,7 @@
 module LCCSClasses
 
     export get_lccs_flag, get_lccs_name, merge_categories
-
+    # define values
     vals = [
         "no_data",
         "cropland_rainfed",
@@ -44,7 +44,7 @@ module LCCSClasses
     ]
 
     
-
+    # add specific numbers to the values above
     keys = UInt8.([0, 10, 11, 12, 20, 30, 40, 50, 60, 61, 62, 70, 71, 72, 80, 81,
     82, 90, 100, 110, 120, 121, 122, 130, 140, 150, 151, 152, 153, 160, 170, 180,
     190, 200, 201, 202, 210, 220])
@@ -93,7 +93,7 @@ module LCCSClasses
         lccs_flags::Set{UInt8}
         Category(n, lccs, val) = new(n, Set(lccs), val, Set(get_lccs_flag.(lccs)))
     end
-
+    # create certain categories out of the values
     categories_list=[
         Category(
             "rainforest",

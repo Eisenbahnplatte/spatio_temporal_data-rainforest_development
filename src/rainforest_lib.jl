@@ -1,5 +1,5 @@
 module Rainforestlib
-
+    # load necessary packages
     using Zarr
     using YAXArrays
     import DotEnv
@@ -11,10 +11,10 @@ module Rainforestlib
 
     include("./utils.jl")
     using .Rainforestlib_utils
-
+    # include the other module called LCCSClasses, where categories were defined
     include("LCCSClasses.jl")
     using .LCCSClasses
-
+    # load metadata link
     CONFIG = DotEnv.config()
 
     function get_lcc_datacube()
@@ -23,14 +23,14 @@ module Rainforestlib
         return lc_dataset[:lccs_class]
     end
 
-
+    # get a rough extent of South America to decrease the amount of data
     function rough_spatial_filter(cube; lon_bounds = (-90,-30), lat_bounds = (-30, 15), time_bounds = (Date(2010), Date(2021)))
 
             return cube[lon = lon_bounds, lat = lat_bounds, time = time_bounds]
     end
 
     
-
+    # create cube for testing
     function save_samplecube(cube, name="testcube.zarr", override=false)
         
         pathname = string(sample_cube_dir, "/", name) 
@@ -58,7 +58,7 @@ module Rainforestlib
         return YAXArrays.Cube(YAXArrays.open_dataset(zarr))
     
     end
-
+    # create a bitmask with the defined categories
     function build_bitmask(local_matrix::Matrix{UInt8}, category::LCCSClasses.Category; set_nan::Bool = false)::Matrix{Float32}
 
         return build_bitmask(local_matrix, category.lccs_flags; set_nan = set_nan)
@@ -77,10 +77,10 @@ module Rainforestlib
         # generate the bitmask by broadcasting the isin function
         bitmask = set_nan ? Rainforestlib_utils.replace_zero_with_nan.(Float32.(in.(local_matrix, Ref(flag_vals)))) : Float32.(in.(local_matrix, Ref(flag_vals)))
 
-        # last step is for converting to NaN and 
+        # last step is for converting to NaN
         return bitmask
     end
-
+    # filter bitmask by defined values
     function filter_bitmask(bitmask, accepted_values::Set{Float64})::Matrix{Float32}
         return Rainforestlib_utils.filter_matched_items.(bitmask, Ref(accepted_values))
     end    
@@ -115,6 +115,7 @@ module Rainforestlib
     #     return categorized_bitmask
     # end
 
+    # create figure that fits the projection type 
     function local_geoaxis_creation!(
         figure::Makie.Figure, 
         lonlims::Tuple{Float64, Float64}, 
@@ -148,7 +149,7 @@ module Rainforestlib
         return geoaxis
     end
 
-
+    # create a figure using the lcc classes
     function build_figure_by_lcc_classes(
         datacube, 
         accepted_values::Set{String};
@@ -170,7 +171,7 @@ module Rainforestlib
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
         lonrange = range(lon[1], lon[end], size(bitmask, 1))
 
-        # we need to flip the latitude because of an error in the datacube!!!!!
+        # we need to flip the latitude because of an error in the datacube!
         latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
 
         if local_map
@@ -192,7 +193,7 @@ module Rainforestlib
         return fig
     end
 
-
+    # create a figure using the categories
     function build_figure_by_categories(
         datacube, 
         categories::Set{LCCSClasses.Category};
@@ -214,7 +215,7 @@ module Rainforestlib
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
         lonrange = range(lon[1], lon[end], size(bitmask, 1))
 
-        # we need to flip the latitude because of an error in the datacube!!!!!
+        # we need to flip the latitude because of an error in the datacube!
         latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
 
         if local_map
@@ -235,7 +236,7 @@ module Rainforestlib
 
         return fig
     end
-
+    # create geographical axes
     function local_geoaxis_creation!(
         figure::Makie.Figure,
         lonlims::Tuple{Float64, Float64}, 
@@ -271,14 +272,14 @@ module Rainforestlib
         return geoaxis
     end
 
-
+    # bimask for all available classes
     function build_bitmask_all_classes(datacube; set_nan::Bool = false)::Matrix
     
         return set_nan ?  Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
     end
 
 
-
+    # figure for all classes
     function build_figure_all_classes(
         datacube; 
         local_map::Bool = true,
@@ -299,7 +300,7 @@ module Rainforestlib
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
         lonrange = range(lon[1], lon[end], size(bitmask, 1))
 
-        # we need to flip the latitude because of an error in the datacube!!!!!
+        # we need to flip the latitude because of an error in the datacube!
         latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
 
         if local_map
@@ -320,7 +321,7 @@ module Rainforestlib
 
         return fig
     end
-
+    # get plots for each step/year
     function build_plots_over_time(
         datacube,
         accepted_values::Set{String}; 
@@ -360,7 +361,7 @@ module Rainforestlib
             lat = YAXArrays.getAxis("lat", datacube).values |> extrema
             lonrange = range(lon[1], lon[end], size(bitmask, 1))
 
-            # we need to flip the latitude because of an error in the datacube!!!!!
+            # we need to flip the latitude because of an error in the datacube!
             latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
 
             ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, figure_x = x_val, figure_y = y_val, title = "Plot $(year)")
@@ -370,7 +371,7 @@ module Rainforestlib
         
         return fig
     end
-
+    # create plots with pixel differences
     function build_diff_figure(
         datacube,
         timestep::Int,
@@ -421,7 +422,7 @@ module Rainforestlib
 
         fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
-        # we need to flip the latitude because of an error in the datacube!!!!!
+        # we need to flip the latitude because of an error in the datacube!
         latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
 
         ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
@@ -431,7 +432,7 @@ module Rainforestlib
     end
 
 
-
+    # pixel differences over the years
     function build_diff_figures_over_time(
         datacube,
         tracked_category::LCCSClasses.Category,
@@ -488,7 +489,7 @@ module Rainforestlib
     end
 
 
-
+    # how many pixels have been replaced
     function count_replacement(old_flag_matrix::Matrix{UInt8}, new_flag_matrix::Matrix{UInt8}, tracked_category::LCCSClasses.Category; reverse::Bool = false)::Dict{UInt8, Int64}
         # it is assumed that both have the same size
     
@@ -525,7 +526,7 @@ module Rainforestlib
         return result
     
     end
-
+    # get data of what was replaced
     function get_replacement_data(
         datacube,
         timestep::Int,
@@ -553,7 +554,7 @@ module Rainforestlib
     
     end
 
-
+    # create figures to show what was replaced
     function build_replacement_figure(
         datacube,
         tracked_category::LCCSClasses.Category;
@@ -641,7 +642,7 @@ module Rainforestlib
         return fig
     end
 
-
+    # create rainforest pixl differences for our period
     function rainforest_diff_over_time(
         datacube,
         tracked_category::LCCSClasses.Category; 
