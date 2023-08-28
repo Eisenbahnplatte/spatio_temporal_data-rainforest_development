@@ -1,4 +1,5 @@
 module Rainforestlib
+
     # load necessary packages
     using Zarr
     using YAXArrays
@@ -8,25 +9,31 @@ module Rainforestlib
     using CairoMakie
     using Colors, ColorSchemes
     using Dates
+    using OrderedCollections
+    
+    using ColorSchemes
 
-    include("./utils.jl")
-    using .Rainforestlib_utils
+
     # include the other module called LCCSClasses, where categories were defined
     include("LCCSClasses.jl")
     using .LCCSClasses
+
+    # include helper functions
+    include("./utils.jl")
+    using .Rainforestlib_utils
     
     CONFIG = DotEnv.config()
+
     # load metadata link
-    function get_lcc_datacube()
-        zarr = Zarr.zopen(CONFIG["ZARR_PATH"])
-        lc_dataset = YAXArrays.open_dataset(zarr)
+    function get_lc_datacube(url::String)
+        # zarr = Zarr.zopen(CONFIG["ZARR_PATH"])
+        lc_dataset = YAXArrays.open_dataset(url)
         return lc_dataset[:lccs_class]
     end
 
     # get a rough extent of South America to decrease the amount of data
-    function rough_spatial_filter(cube; lon_bounds = (-83,-30), lat_bounds = (-20, 4), time_bounds = (Date(2010), Date(2021)))
-
-            return cube[lon = lon_bounds, lat = lat_bounds, time = time_bounds]
+    function spatio_temporal_filter(cube; lon_bounds = (-83,-30), lat_bounds = (-20, 4), time_bounds = (Date(2010), Date(2021)))
+        return cube[lon = lon_bounds, lat = lat_bounds, time = time_bounds]
     end
 
     
@@ -43,9 +50,9 @@ module Rainforestlib
             println("Overriding existing sample cube....")
             YAXArrays.savecube(cube, pathname, driver=:zarr)
         end
-    
     end
     
+
     function get_samplecube()
         
         if !isfile(testing_cube_path)
@@ -56,13 +63,15 @@ module Rainforestlib
         
         zarr = Zarr.zopen(testing_cube_path)
         return YAXArrays.Cube(YAXArrays.open_dataset(zarr))
-    
     end
+
+
     # create a bitmask with the defined categories
     function build_bitmask(local_matrix::Matrix{UInt8}, category::LCCSClasses.Category; set_nan::Bool = false)::Matrix{Float32}
 
         return build_bitmask(local_matrix, category.lccs_flags; set_nan = set_nan)
     end
+
 
     function build_bitmask(local_matrix::Matrix{UInt8}, lccs_classes::Set{String}; set_nan::Bool = false):: Matrix{Float32}
 
@@ -70,8 +79,8 @@ module Rainforestlib
         flag_vals = Set(get_lccs_flag.(lccs_classes))
 
         return build_bitmask(local_matrix, flag_vals; set_nan = set_nan)
-        
     end
+
 
     function build_bitmask(local_matrix::Matrix{UInt8}, flag_vals::Set{UInt8}; set_nan::Bool = false)::Matrix{Float32}
         # generate the bitmask by broadcasting the isin function
@@ -80,18 +89,31 @@ module Rainforestlib
         # last step is for converting to NaN
         return bitmask
     end
+
+
     # filter bitmask by defined values
     function filter_bitmask(bitmask, accepted_values::Set{Float64})::Matrix{Float32}
+
         return Rainforestlib_utils.filter_matched_items.(bitmask, Ref(accepted_values))
     end    
 
+
     function build_category_mask(local_matrix::Matrix{UInt8})
+
         return LCCSClasses.flag_to_category_val.(local_matrix)
     end
 
-    function build_selected_categorial_mask(local_matrix::Matrix{UInt8}, selected_categories::Set{LCCSClasses.Category})
+
+    function build_selected_categorial_mask(local_matrix::Matrix{UInt8}, selected_categories::Array{LCCSClasses.Category})
     
         return LCCSClasses.get_category_val_for_selected_categories.(local_matrix, Ref(selected_categories))
+    end
+
+
+    # bimask for all available classes
+    function build_bitmask_all_classes(datacube; set_nan::Bool = false)::Matrix
+
+        return set_nan ?  Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
     end
 
     # function categorize_bitmask(bitmask, categories::Dict)::Matrix{Float32}
@@ -115,127 +137,40 @@ module Rainforestlib
     #     return categorized_bitmask
     # end
 
-    # create figure that fits the projection type 
-    function local_geoaxis_creation!(
-        figure::Makie.Figure, 
-        lonlims::Tuple{Float64, Float64}, 
-        latlims::Tuple{Float64, Float64}, 
-        lonpadding::Float64 = 1.0, 
-        latpadding::Float64 = 1.0,
-        figure_x::Int = 1,
-        figure_y::Int = 1,
-        coastlines::Bool = true
-        )::Makie.Axis
+    # # create figure that fits the projection type 
+    # function local_geoaxis_creation!(
+    #     figure::Makie.Figure, 
+    #     lonlims::Tuple{Float64, Float64}, 
+    #     latlims::Tuple{Float64, Float64}, 
+    #     lonpadding::Float64 = 1.0, 
+    #     latpadding::Float64 = 1.0,
+    #     figure_x::Int = 1,
+    #     figure_y::Int = 1,
+    #     coastlines::Bool = true
+    #     )::Makie.Axis
         
-        paddingfun = (x, y) -> x < 0 ? x-y : x + y
+    #     paddingfun = (x, y) -> x < 0 ? x-y : x + y
 
-        lon_padded = paddingfun.(lonlims, lonpadding)
-        lon_center = lon_padded[1] + ((lon_padded[2] - lon_padded[1]) / 2)
+    #     lon_padded = paddingfun.(lonlims, lonpadding)
+    #     lon_center = lon_padded[1] + ((lon_padded[2] - lon_padded[1]) / 2)
 
 
 
-        lat_padded = paddingfun.(latlims, latpadding)
-        lat_center = lat_padded[1] + ((lat_padded[2] - lat_padded[1]) / 2)
+    #     lat_padded = paddingfun.(latlims, latpadding)
+    #     lat_center = lat_padded[1] + ((lat_padded[2] - lat_padded[1]) / 2)
         
-        geoaxis = GeoMakie.GeoAxis(
-            figure[figure_x, figure_y]; 
-            dest = "+proj=ortho +lon_0=$(lon_center) +lat_0=$(lat_center)",
-            # source = dest,
-            lonlims = lonlims,
-            latlims = latlims,
-            coastlines = coastlines
-        )
+    #     geoaxis = GeoMakie.GeoAxis(
+    #         figure[figure_x, figure_y]; 
+    #         dest = "+proj=ortho +lon_0=$(lon_center) +lat_0=$(lat_center)",
+    #         # source = dest,
+    #         lonlims = lonlims,
+    #         latlims = latlims,
+    #         coastlines = coastlines
+    #     )
 
-        return geoaxis
-    end
+    #     return geoaxis
+    # end
 
-    # create a figure using the lcc classes
-    function build_figure_by_lcc_classes(
-        datacube, 
-        accepted_values::Set{String};
-        local_map::Bool = true,
-        timestep::Int = 1,
-        lonpadding::Float64 = 1.0, 
-        latpadding::Float64 = 1.0,
-        colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
-        shading::Bool = false,
-        set_nan::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
-
-        bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
-
-        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
-
-        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
-        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
-        lonrange = range(lon[1], lon[end], size(bitmask, 1))
-
-        # we need to flip the latitude because of an error in the datacube!
-        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
-
-        if local_map
-            ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
-        else
-            projection = "+proj=lonlat"
-            ga = GeoMakie.GeoAxis(
-                fig[1, 1]; # any cell of the figure's layout
-                dest = projection,
-                source = projection,
-                coastlines = true # plot coastlines from Natural Earth, as a reference.
-            )
-
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
-
-        end
-
-        return fig
-    end
-
-    # create a figure using the categories
-    function build_figure_by_categories(
-        datacube, 
-        categories::Set{LCCSClasses.Category};
-        local_map::Bool = true,
-        timestep::Int = 1,
-        lonpadding::Float64 = 1.0, 
-        latpadding::Float64 = 1.0,
-        colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
-        shading::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = nothing)::Makie.Figure
-
-
-        bitmask = build_selected_categorial_mask(datacube[:, :, timestep], categories)
-        
-        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
-
-        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
-        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
-        lonrange = range(lon[1], lon[end], size(bitmask, 1))
-
-        # we need to flip the latitude because of an error in the datacube!
-        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
-
-        if local_map
-            ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
-        else
-            projection = "+proj=lonlat"
-            ga = GeoMakie.GeoAxis(
-                fig[1, 1]; # any cell of the figure's layout
-                dest = projection,
-                source = projection,
-                coastlines = true # plot coastlines from Natural Earth, as a reference.
-            )
-
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
-
-        end
-
-        return fig
-    end
     # create geographical axes
     function local_geoaxis_creation!(
         figure::Makie.Figure,
@@ -272,12 +207,150 @@ module Rainforestlib
         return geoaxis
     end
 
-    # bimask for all available classes
-    function build_bitmask_all_classes(datacube; set_nan::Bool = false)::Matrix
-    
-        return set_nan ?  Rainforestlib_utils.replace_zero_with_nan.(LCCSClasses.flag_to_category_val.(datacube)) : LCCSClasses.flag_to_category_val.(datacube)
+    function build_figure(
+        datacube,
+        bitmask;
+        title::String="",
+        local_map::Bool,
+        lonpadding::Float64, 
+        latpadding::Float64,
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real}, 
+        shading::Bool,
+        resolution::Union{Nothing, Tuple{Int, Int}})::Makie.Figure
+
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+
+        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
+        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
+        lonrange = range(lon[1], lon[end], size(bitmask, 1))
+
+        # we need to flip the latitude because of an error in the datacube!
+        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
+
+        if local_map
+            ga = local_geoaxis_creation!(fig, lon, lat; lonpadding, latpadding, title=title)
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+        else
+            projection = "+proj=lonlat"
+            ga = GeoMakie.GeoAxis(
+                fig[1, 1]; # any cell of the figure's layout
+                dest = projection,
+                source = projection,
+                coastlines = true, # plot coastlines from Natural Earth, as a reference.
+                title=title
+            )
+
+            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+
+        end
+
+        return fig
     end
 
+    # create a figure using the lcc classes
+    function build_figure_by_lcc_classes(
+        datacube, 
+        accepted_values::Set{String};
+        local_map::Bool = true,
+        timestep::Int = 1,
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
+        shading::Bool = false,
+        set_nan::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        legend::Bool = true)::Makie.Figure
+
+        bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
+
+        fig = build_figure(datacube, bitmask; local_map, lonpadding, latpadding, colormap, colorrange, shading, resolution)
+
+        if (legend) 
+            xs = 0:0.5:10
+
+            points = []
+
+            if (typeof(colormap)==Symbol)
+                  
+                the_colormap = ColorSchemes.viridis
+                the_colormap_length = length(the_colormap.colors)
+                println(the_colormap_length)
+
+                points = [scatter!(xs, sin.(xs .* i), color = color)
+                    for (i, color) in zip(1:length(accepted_values), the_colormap)]
+            else
+                points = [scatter!(xs, sin.(xs .* i), color = color)
+                    for (i, color) in zip(1:length(colormap(colormap)), colormap)]
+            end
+
+            Legend(
+                fig[1, 1], 
+                points,
+                ["$lcss_class" for lcss_class in accepted_values],
+                "Legend",
+                tellheight = false,
+                tellwidth = false,
+                margin = (0, 30, 50, 50),
+                halign = :right, 
+                valign = :center, 
+                orientation = :vertical
+            )
+        end
+
+        return fig
+    end
+
+    # create a figure using the categories
+    function build_figure_by_categories(
+        datacube, 
+        categories::OrderedCollections.OrderedDict{String, Main.Rainforestlib.LCCSClasses.Category};
+        title::String = "",
+        local_map::Bool = true,
+        timestep::Int = 1,
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap = :viridis,
+        colorrange = (0,1),
+        shading::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        legend::Bool =false
+        )::Makie.Figure
+
+        categories_arr = Array{Rainforestlib.LCCSClasses.Category}(undef,0)
+        for (_, value) in categories
+            push!(categories_arr, value)
+        end
+
+        bitmask = build_selected_categorial_mask(datacube[:, :, timestep], categories_arr)
+
+        colorrange = (first(categories_arr).float, last(categories_arr).float)
+
+        fig = build_figure(datacube, bitmask; local_map, title, lonpadding, latpadding, colormap, colorrange, shading, resolution)
+
+        if (legend) 
+            xs = 0:0.5:10
+
+            points = [scatter!(xs, sin.(xs .* i), color = color)
+                for (i, color) in zip(1:length(colormap), colormap)]
+
+            Legend(
+                fig[1, 1], 
+                points,
+                ["$(lcss_class.label)" for (index,lcss_class) in categories],
+                "Legend",
+                tellheight = false,
+                tellwidth = false,
+                margin = (0, 30, 50, 50),
+                halign = :right, 
+                valign = :center, 
+                orientation = :vertical
+            )
+        end
+
+        return fig
+    end
 
     # figure for all classes
     function build_figure_all_classes(
@@ -321,6 +394,8 @@ module Rainforestlib
 
         return fig
     end
+
+
     # get plots for each step/year
     function build_plots_over_time(
         datacube,
@@ -371,6 +446,8 @@ module Rainforestlib
         
         return fig
     end
+
+
     # create plots with pixel differences
     function build_diff_figure(
         datacube,
@@ -524,8 +601,9 @@ module Rainforestlib
         end
     
         return result
-    
     end
+
+
     # get data of what was replaced
     function get_replacement_data(
         datacube,
@@ -641,6 +719,7 @@ module Rainforestlib
     
         return fig
     end
+
 
     # create rainforest pixl differences for our period
     function rainforest_diff_over_time(

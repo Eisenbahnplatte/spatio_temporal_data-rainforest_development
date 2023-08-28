@@ -88,15 +88,18 @@ module LCCSClasses
 
     struct Category
         name::String
+        label::String
         lccs_classes::Set{String}
         float::Float64
         lccs_flags::Set{UInt8}
-        Category(n, lccs, val) = new(n, Set(lccs), val, Set(get_lccs_flag.(lccs)))
+        Category(n, l, lccs, val) = new(n, l, Set(lccs), val, Set(get_lccs_flag.(lccs)))
     end
+
     # create certain categories out of the values
     categories_list=[
         Category(
             "rainforest",
+            "Rainforest",
             [
                 "tree_broadleaved_evergreen_closed_to_open"
             ],
@@ -104,6 +107,7 @@ module LCCSClasses
         ),
         Category(
             "forest",
+            "Forest",
             [
                 "tree_broadleaved_deciduous_closed_to_open",
                 "tree_broadleaved_deciduous_closed",
@@ -122,6 +126,7 @@ module LCCSClasses
         ),
         Category(
             "shrubland",
+            "Shrubland",
             [
                 "shrubland",
                 "shrubland_evergreen",
@@ -132,6 +137,7 @@ module LCCSClasses
         ),
         Category(
             "flat_vegetation",
+            "Flat Vegetation",
             [
                 "grassland",
                 "lichens_and_mosses",
@@ -140,6 +146,7 @@ module LCCSClasses
         ),
         Category(
             "sparse_vegetation",
+            "Sparse Vegetation",
             [
                 "mosaic_natural_vegetation",
                 "mosaic_tree_and_shrub", 
@@ -153,6 +160,7 @@ module LCCSClasses
         ),
         Category(
             "no_data",
+            "No Data",
             [
                 "no_data"
             ],
@@ -160,6 +168,7 @@ module LCCSClasses
         ),
         Category(
             "water",
+            "Water",
             [
                 "water",
                 "snow_and_ice"
@@ -168,6 +177,7 @@ module LCCSClasses
         ),
         Category(
             "bare_areas",
+            "Bare Areas",
             [
                 "bare_areas",
                 "bare_areas_consolidated",
@@ -177,6 +187,7 @@ module LCCSClasses
         ),
         Category(
             "cropland",
+            "Cropland",
             [
                 "cropland_rainfed", 
                 "cropland_rainfed_herbaceous_cover", 
@@ -188,6 +199,7 @@ module LCCSClasses
         ),
         Category(
             "urban",
+            "Urban Area",
             [
                 "urban"
             ],
@@ -202,7 +214,7 @@ module LCCSClasses
         return get_category_val_for_selected_categories(flag, Set(categories_list))
     end
 
-    function get_category_val_for_selected_categories(flag::UInt8, selected_categories::Set{Category})
+    function get_category_val_for_selected_categories(flag::UInt8, selected_categories::Array{Category})
         
         for category in selected_categories
             if flag in category.lccs_flags
