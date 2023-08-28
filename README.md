@@ -39,7 +39,7 @@ important! code works only with YAXArrays v0.4.6
 - [x] Durch was wird verdrängter Wald ersetzt? -> Balkendiagram
 - [ ] Legende (Fabi)
 - [ ] Beschreibender Text (Kay)
-- [ ] eine nähere beispielhafte Perspektive visualisieren um Änderungen besser zu verdeutlichen (Beispiel: https://www.faszination-regenwald.de/info-center/zerstoerung/flaechenverluste/)
+- [X] eine nähere beispielhafte Perspektive visualisieren um Änderungen besser zu verdeutlichen (Beispiel: https://www.faszination-regenwald.de/info-center/zerstoerung/flaechenverluste/), small soy area und forestloss_region
 - [ ] Das ganze als persistentes build bauen, am besten mit docker der jupyter life mit Kays finalemr abgabe startet (Fabi, oder Denios wenn er zurück ist)
   - Dazu muss ein persistenter stand gepusht werden, also auch das Manifest (neuer branch release?!)
   - der jupyter server sollte sich dann im browser des hosts auf bel. port öffnen
