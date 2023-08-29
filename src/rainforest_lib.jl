@@ -261,7 +261,7 @@ module Rainforestlib
         shading::Bool = false,
         set_nan::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
-        legend::Bool = true)::Makie.Figure
+        legend::String = "")::Makie.Figure
 
         bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
 
@@ -271,7 +271,7 @@ module Rainforestlib
 
         fig = build_figure(datacube, bitmask; local_map, title, lonpadding, latpadding, colormap, colorrange, shading, resolution)
 
-        if (legend) 
+        if (legend!="") 
             xs = 0:0.5:10
 
             points = [scatter!(xs, sin.(xs .* i), color = color)
@@ -281,10 +281,10 @@ module Rainforestlib
                 fig[1, 2], 
                 points,
                 ["$lcss_class" for lcss_class in accepted_values], # [join(accepted_values, "\n")],
-                "Legend",
+                legend,
                 tellheight = false,
                 tellwidth = false,
-                margin = (0, 0, 50, 50),
+                margin = (0, 30, 50, 50),
                 halign = :right, 
                 valign = :center, 
                 orientation = :vertical
@@ -379,6 +379,7 @@ module Rainforestlib
     # figure for all classes
     function build_figure_all_classes(
         datacube; 
+        title::String = "",
         local_map::Bool = true,
         timestep::Int = 1,
         lonpadding::Float64 = 1.0, 
@@ -391,32 +392,158 @@ module Rainforestlib
 
         bitmask = build_bitmask_all_classes(datacube[:, :, timestep], set_nan = set_nan)
 
-        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+        fig = build_figure(datacube, bitmask; local_map, title, lonpadding, latpadding, colormap, colorrange, shading, resolution)
+
+        # Creating Legend
+        xs = 0:0.5:10
+
+        categories_list = LCCSClasses.categories_list
+
+        the_colormap = ColorSchemes.viridis
+        one_step = length(the_colormap.colors) / length(categories_list)
+
+        points = [scatter!(xs, sin.(xs .* i), color = the_colormap.colors[trunc(Int, (i*one_step))])
+            for (i, color) in zip(1:length(categories_list), the_colormap)]
+
+        Legend(
+            fig[1, 2], 
+            points,
+            ["$(category.label)" for category in categories_list], # [join(accepted_values, "\n")],
+            "Legend",
+            tellheight = false,
+            tellwidth = false,
+            margin = (0, 200, 0, 0),
+            halign = :right, 
+            valign = :center, 
+            orientation = :vertical
+        )
+
+        return fig
+
+
+    end
+
+
+    # create plots with pixel differences
+    function build_diff_figure(
+        datacube,
+        timestep::Int,
+        previous_mask::Union{Nothing, Matrix},
+        tracked_category::LCCSClasses.Category;
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colormap = :viridis,
+        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
+        shading::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        geo_res::Float64
+        )::Tuple{Figure, Matrix}
+
+        timesteps = YAXArrays.getAxis("time", datacube).values
+
+        year = timesteps[timestep]
+
+        # cant use set NaN here because NaN != NaN
+        bitmask::Matrix = build_bitmask(datacube[:, :, timestep], tracked_category; set_nan = false)
+
+        # if there is no previous mask use identity as diff
+        if isnothing(previous_mask)
+            previous_mask = bitmask
+        end
+
+        diff_bitmask = Rainforestlib_utils.diff_matrices(bitmask, previous_mask) do new, old
+            if old == new
+                return old
+            else
+                if new > old
+                    # this means something got added
+                    return Float32(2)
+                else
+                    # this means something previously selected got unselected
+                    return Float32(3)
+                end
+            end
+        end
+
+        if (!isnothing(geo_res))
+            number_of_rf_pixels = sum(filter(!isnan, bitmask))
+            squarekilometres = trunc(Int, (number_of_rf_pixels * geo_res))
+    
+            println("Rainforest in $(year): $(squarekilometres) km^2")    
+        end
 
         lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
-        lonrange = range(lon[1], lon[end], size(bitmask, 1))
+        lonrange = range(lon[1], lon[end], size(diff_bitmask, 1))
+
+        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
 
         # we need to flip the latitude because of an error in the datacube!
-        latrange = range(lat[1], lat[end], size(bitmask, 2))[end:-1:1]
+        latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
 
-        if local_map
-            ga = local_geoaxis_creation!(fig, lon, lat, lonpadding, latpadding)
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+        ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
+        surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
+
+        return fig, bitmask
+    end
+
+
+    # pixel differences over the years
+    function build_diff_figures_over_time(
+        datacube,
+        tracked_category::LCCSClasses.Category,
+        target_path::String;
+        name_base::String = "figure", 
+        lonpadding::Float64 = 1.0, 
+        latpadding::Float64 = 1.0,
+        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
+        shading::Bool = false,
+        gradual_diff::Bool = false,
+        resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
+        geo_res::Float64
+    )::Nothing
+        # build one figure with diffs for each timestep
+        timesteps = YAXArrays.getAxis("time", datacube).values
+
+        if gradual_diff
+            last_bitmask = nothing
         else
-            projection = "+proj=lonlat"
-            ga = GeoMakie.GeoAxis(
-                fig[1, 1]; # any cell of the figure's layout
-                dest = projection,
-                source = projection,
-                coastlines = true # plot coastlines from Natural Earth, as a reference.
-            )
-
-            surface!(ga, lonrange, latrange, bitmask; shading = shading, colormap = colormap)
-
+            # set it to the first bitmask and dont change it anymore
+            last_bitmask = build_bitmask(datacube[:, :, 1], tracked_category; set_nan = false)
         end
 
-        return fig
+        colormap = [
+            RGB(1.0, 1.0, 1.0),  # White
+            RGB(0.0, 1.0, 0.0),  # Green
+            RGB(0.0, 0.0, 1.0),  # Blue
+            RGB(1.0, 0.0, 0.0),  # Red
+        ]
+        
+        # 3 is the time dimension
+        for t in range(1, length(timesteps))
+
+            filename = "$(target_path)/$(name_base)_$(t).png"
+
+            figure, new_bitmask = build_diff_figure(
+                datacube, 
+                t, 
+                last_bitmask, 
+                tracked_category; 
+                lonpadding = lonpadding,
+                latpadding = latpadding,
+                colormap = colormap,
+                shading = shading,
+                resolution = resolution,
+                colorrange = colorrange,
+                geo_res = geo_res
+            )
+
+            if gradual_diff
+                last_bitmask = new_bitmask
+            end
+
+            save(filename, figure)
+        end
     end
 
 
@@ -472,124 +599,6 @@ module Rainforestlib
     end
 
 
-    # create plots with pixel differences
-    function build_diff_figure(
-        datacube,
-        timestep::Int,
-        previous_mask::Union{Nothing, Matrix},
-        tracked_category::LCCSClasses.Category;
-        lonpadding::Float64 = 1.0, 
-        latpadding::Float64 = 1.0,
-        colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
-        shading::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = nothing
-        )::Tuple{Figure, Matrix}
-
-        timesteps = YAXArrays.getAxis("time", datacube).values
-
-        year = timesteps[timestep]
-
-        # cant use set NaN here because NaN != NaN
-        bitmask::Matrix = build_bitmask(datacube[:, :, timestep], tracked_category; set_nan = false)
-
-        # if there is no previous mask use identity as diff
-        if isnothing(previous_mask)
-            previous_mask = bitmask
-        end
-
-        diff_bitmask = Rainforestlib_utils.diff_matrices(bitmask, previous_mask) do new, old
-            if old == new
-                return old
-            else
-                if new > old
-                    # this means something got added
-                    return Float32(2)
-                else
-                    # this means something previously selected got unselected
-                    return Float32(3)
-                end
-            end
-        end
-
-        number_of_rf_pixels = sum(filter(!isnan, bitmask))
-        
-
-        println("Number of rainforest pixels in $(year): $(number_of_rf_pixels)")
-
-        lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
-        lat = YAXArrays.getAxis("lat", datacube).values |> extrema
-        lonrange = range(lon[1], lon[end], size(diff_bitmask, 1))
-
-        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
-
-        # we need to flip the latitude because of an error in the datacube!
-        latrange = range(lat[1], lat[end], size(diff_bitmask, 2))[end:-1:1]
-
-        ga = local_geoaxis_creation!(fig, lon, lat; lonpadding = lonpadding, latpadding = latpadding, title = "Plot $(year)")
-        surface!(ga, lonrange, latrange, diff_bitmask; shading = shading, colormap = colormap, colorrange = colorrange)
-
-        return fig, bitmask
-    end
-
-
-    # pixel differences over the years
-    function build_diff_figures_over_time(
-        datacube,
-        tracked_category::LCCSClasses.Category,
-        target_path::String;
-        name_base::String = "figure", 
-        lonpadding::Float64 = 1.0, 
-        latpadding::Float64 = 1.0,
-        colorrange::Tuple{<:Real, <:Real} = (0, 3), 
-        shading::Bool = false,
-        gradual_diff::Bool = false,
-        resolution::Union{Nothing, Tuple{Int, Int}} = nothing
-    )::Nothing
-        # build one figure with diffs for each timestep
-        timesteps = YAXArrays.getAxis("time", datacube).values
-
-        if gradual_diff
-            last_bitmask = nothing
-        else
-            # set it to the first bitmask and dont change it anymore
-            last_bitmask = build_bitmask(datacube[:, :, 1], tracked_category; set_nan = false)
-        end
-
-        colormap = [
-            RGB(1.0, 1.0, 1.0),  # White
-            RGB(0.0, 1.0, 0.0),  # Green
-            RGB(0.0, 0.0, 1.0),  # Blue
-            RGB(1.0, 0.0, 0.0),  # Red
-        ]
-        
-        # 3 is the time dimension
-        for t in range(1, length(timesteps))
-
-            filename = "$(target_path)/$(name_base)_$(t).png"
-
-            figure, new_bitmask = build_diff_figure(
-                datacube, 
-                t, 
-                last_bitmask, 
-                tracked_category; 
-                lonpadding = lonpadding,
-                latpadding = latpadding,
-                colormap = colormap,
-                shading = shading,
-                resolution = resolution,
-                colorrange = colorrange
-            )
-
-            if gradual_diff
-                last_bitmask = new_bitmask
-            end
-
-            save(filename, figure)
-        end
-    end
-
-
     # how many pixels have been replaced
     function count_replacement(old_flag_matrix::Matrix{UInt8}, new_flag_matrix::Matrix{UInt8}, tracked_category::LCCSClasses.Category; reverse::Bool = false)::Dict{UInt8, Int64}
         # it is assumed that both have the same size
@@ -632,7 +641,8 @@ module Rainforestlib
     function get_replacement_data(
         datacube,
         timestep::Int,
-        tracked_category::LCCSClasses.Category;
+        tracked_category::LCCSClasses.Category,
+        geo_res::Float64;
         reverse::Bool = false
     )::Tuple{Vector{Int}, Vector{Int}, Vector{Int}, Vector{UInt8}}
 
@@ -647,7 +657,9 @@ module Rainforestlib
     
         x_vals = fill(step, length(sorted_result_keys))
     
-        y_vals = [results_dict[k] for k in sorted_result_keys]
+        
+        # calculate pixel to squarekilometres
+        y_vals = [trunc(Int, (results_dict[k] * geo_res)) for k in sorted_result_keys]
     
         grp = 1:length(sorted_result_keys)
     
@@ -659,7 +671,8 @@ module Rainforestlib
     # create figures to show what was replaced
     function build_replacement_figure(
         datacube,
-        tracked_category::LCCSClasses.Category;
+        tracked_category::LCCSClasses.Category,
+        geo_res::Float64;
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
         reverse::Bool = false
     )::Makie.Figure
@@ -692,7 +705,8 @@ module Rainforestlib
             x, y, gpr, color_mappings = get_replacement_data(
                 datacube,
                 timestep,
-                tracked_category;
+                tracked_category,
+                geo_res;
                 reverse = reverse
             )
 
@@ -711,7 +725,9 @@ module Rainforestlib
         ax = Axis(
             fig[1,1], 
             xticks = (1:length(xaxis_names), xaxis_names),
-            title = "Replacement of Rainforest pixels by year"
+            xlabel = "Year",
+            ylabel = "Area in square kilometers",
+            title = "Replacement of Rainforest by year"
         )
     
         
@@ -748,7 +764,8 @@ module Rainforestlib
     # create rainforest pixl differences for our period
     function rainforest_diff_over_time(
         datacube,
-        tracked_category::LCCSClasses.Category; 
+        tracked_category::LCCSClasses.Category,
+        geo_res::Float64; 
         resolution::Union{Nothing, Tuple{Int, Int}} = Nothing,
         gradual_diff::Bool = false,
         )::Makie.Figure
@@ -819,13 +836,13 @@ module Rainforestlib
                 end                
             end)
 
+            # calculate pixel to squarekilometres
+            added_vals = trunc(Int, (added_vals * geo_res))
+            removed_vals = trunc(Int, (removed_vals * geo_res))
 
             append!(x_vals, [t, t])
             append!(y_vals, [added_vals, removed_vals])
             append!(grp_vals, [1, 2])
-
-            println("Number of rainforest pixels in $(year(current_year)): $(raw_tracked_number)")
-            println("Diff to last: $(raw_tracked_number - last_raw_count)")
 
             last_raw_count = raw_tracked_number
 
@@ -838,6 +855,8 @@ module Rainforestlib
         ax = Axis(
             fig[1,1], 
             xticks = (1:length(xaxis_names), xaxis_names),
+            xlabel = "Year",
+            ylabel = "Area in km^2",
             title = "Change of Rainforest pixels by year"
         )
 

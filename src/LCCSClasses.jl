@@ -211,7 +211,7 @@ module LCCSClasses
 
     function flag_to_category_val(flag::UInt8)::Float32
         
-        return get_category_val_for_selected_categories(flag, Set(categories_list))
+        return get_category_val_for_selected_categories(flag, Array(categories_list))
     end
 
     function get_category_val_for_selected_categories(flag::UInt8, selected_categories::Array{Category})
