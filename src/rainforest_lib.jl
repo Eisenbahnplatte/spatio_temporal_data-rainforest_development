@@ -219,7 +219,7 @@ module Rainforestlib
         shading::Bool,
         resolution::Union{Nothing, Tuple{Int, Int}})::Makie.Figure
 
-        fig = isnothing(resolution) ?  Figure() : Figure(resolution = resolution)
+        fig = isnothing(resolution) ?  Figure(fontsize=12) : Figure(resolution = resolution, fontsize=12)
 
         lon = YAXArrays.getAxis("lon", datacube).values |> extrema 
         lat = YAXArrays.getAxis("lat", datacube).values |> extrema
@@ -248,16 +248,16 @@ module Rainforestlib
         return fig
     end
 
-    # create a figure using the lcc classes
+    # create a figure using the lcc classes, it is only measured if the target classes are in (1.0) or not (NaN)
     function build_figure_by_lcc_classes(
         datacube, 
         accepted_values::Set{String};
+        title::String="",
         local_map::Bool = true,
         timestep::Int = 1,
         lonpadding::Float64 = 1.0, 
         latpadding::Float64 = 1.0,
-        colormap = :viridis,
-        colorrange::Tuple{<:Real, <:Real} = (0, 1), 
+        color = RGB(0.0, 1.0, 0.0),
         shading::Bool = false,
         set_nan::Bool = false,
         resolution::Union{Nothing, Tuple{Int, Int}} = nothing,
@@ -265,39 +265,63 @@ module Rainforestlib
 
         bitmask = build_bitmask(datacube[:, :, timestep], accepted_values; set_nan = set_nan)
 
-        fig = build_figure(datacube, bitmask; local_map, lonpadding, latpadding, colormap, colorrange, shading, resolution)
+        colormap = []
+        push!(colormap, color)
+        colorrange::Tuple{<:Real, <:Real} = (0, 1)
+
+        fig = build_figure(datacube, bitmask; local_map, title, lonpadding, latpadding, colormap, colorrange, shading, resolution)
 
         if (legend) 
             xs = 0:0.5:10
 
-            points = []
-
-            if (typeof(colormap)==Symbol)
-                  
-                the_colormap = ColorSchemes.viridis
-                the_colormap_length = length(the_colormap.colors)
-                println(the_colormap_length)
-
-                points = [scatter!(xs, sin.(xs .* i), color = color)
-                    for (i, color) in zip(1:length(accepted_values), the_colormap)]
-            else
-                points = [scatter!(xs, sin.(xs .* i), color = color)
-                    for (i, color) in zip(1:length(colormap(colormap)), colormap)]
-            end
+            points = [scatter!(xs, sin.(xs .* i), color = color)
+                for (i) in zip(1:length(accepted_values))]
 
             Legend(
-                fig[1, 1], 
+                fig[1, 2], 
                 points,
-                ["$lcss_class" for lcss_class in accepted_values],
+                ["$lcss_class" for lcss_class in accepted_values], # [join(accepted_values, "\n")],
                 "Legend",
                 tellheight = false,
                 tellwidth = false,
-                margin = (0, 30, 50, 50),
+                margin = (0, 0, 50, 50),
                 halign = :right, 
                 valign = :center, 
                 orientation = :vertical
             )
         end
+
+        # if (legend) 
+        #     xs = 0:0.5:10
+
+        #     points = []
+
+        #     if (typeof(colormap)==Symbol)
+                  
+        #         the_colormap = ColorSchemes.viridis
+        #         the_colormap_length = length(the_colormap.colors)
+        #         println(the_colormap_length)
+
+        #         points = [scatter!(xs, sin.(xs .* i), color = color)
+        #             for (i, color) in zip(1:length(accepted_values), the_colormap)]
+        #     else
+        #         points = [scatter!(xs, sin.(xs .* i), color = color)
+        #             for (i, color) in zip(1:length(colormap), colormap)]
+        #     end
+
+        #     Legend(
+        #         fig[1, 1], 
+        #         points,
+        #         ["$lcss_class" for lcss_class in accepted_values],
+        #         "Legend",
+        #         tellheight = false,
+        #         tellwidth = false,
+        #         margin = (0, 30, 50, 50),
+        #         halign = :right, 
+        #         valign = :center, 
+        #         orientation = :vertical
+        #     )
+        # end
 
         return fig
     end
