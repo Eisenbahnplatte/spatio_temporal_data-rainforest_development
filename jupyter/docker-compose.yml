@@ -14,4 +14,6 @@ services:
      - ./:/home/jovyan/work 
     environment: 
      - JUPYTER_ENABLE_LAB=yes 
-    command: start-notebook.sh --NotebookApp.token='supersave_token' --no-browser --allow-root --notebook-dir=/home/jovyan/work 
+    command: >
+      sh -c "/home/jovyan/work/install.sh
+      && start-notebook.sh --NotebookApp.token='supersave_token' --no-browser --allow-root --notebook-dir=/home/jovyan/work"
