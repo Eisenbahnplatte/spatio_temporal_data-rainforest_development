@@ -399,16 +399,19 @@ module Rainforestlib
 
         categories_list = LCCSClasses.categories_list
 
-        the_colormap = ColorSchemes.viridis
-        one_step = length(the_colormap.colors) / length(categories_list)
+        points = [scatter!(xs, sin.(xs .* i), color = colormap[i])
+            for i in eachindex(colormap)]
 
-        points = [scatter!(xs, sin.(xs .* i), color = the_colormap.colors[trunc(Int, (i*one_step))])
-            for (i, color) in zip(1:length(categories_list), the_colormap)]
+        # the_colormap = ColorSchemes.gist_ncar
+        # one_step = length(the_colormap.colors) / length(categories_list)
+
+        # points = [scatter!(xs, sin.(xs .* i), color = the_colormap.colors[trunc(Int, (i*one_step))])
+        #     for (i, color) in zip(1:length(categories_list), the_colormap)]
 
         Legend(
             fig[1, 2], 
             points,
-            ["$(category.label)" for category in categories_list], # [join(accepted_values, "\n")],
+            ["$(category.label)" for category in categories_list],
             "Legend",
             tellheight = false,
             tellwidth = false,

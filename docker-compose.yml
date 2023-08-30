@@ -7,6 +7,7 @@ volumes:
 services: 
   jupyter: 
     image: jupyter/datascience-notebook:julia-1.9.1
+    container_name: jupyter_julia
     ports: 
       - 8888:8888 
     volumes: 
