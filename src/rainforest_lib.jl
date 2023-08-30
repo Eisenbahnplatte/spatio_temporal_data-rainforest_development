@@ -5,7 +5,7 @@ module Rainforestlib
     using YAXArrays
     import DotEnv
     using GeoMakie
-    using GLMakie
+   # using GLMakie
     using CairoMakie
     using Colors, ColorSchemes
     using Dates
